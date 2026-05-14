@@ -38,6 +38,8 @@
     font-size:18px;
     line-height:1.5;
     padding:0;
+    /* allow textarea to occupy full viewport height so tapping lower area focuses it */
+    min-height: calc(100vh - 36px);
     background:transparent;
     color:inherit;
     caret-color: #111;
@@ -45,19 +47,8 @@
   }
   textarea::placeholder{color:#999}
 
-  #debug{
-    position:fixed;
-    left:0;
-    right:0;
-    top:0;
-    background:rgba(0,0,0,0.6);
-    color:#fff;
-    font-size:12px;
-    padding:6px 10px;
-    text-align:center;
-    z-index:9999;
-    backdrop-filter: blur(4px);
-  }
+  /* hidden by default; shown only on errors */
+  #debug{display:none;position:fixed;left:0;right:0;top:0;background:rgba(0,0,0,0.6);color:#fff;font-size:12px;padding:6px 10px;text-align:center;z-index:9999;backdrop-filter: blur(4px);}
 
   .wrap{padding-top:38px}
 
@@ -75,10 +66,12 @@
     <div id="ta-wrap">
       <textarea id="editor" placeholder="Start typing…" autofocus></textarea>
       <span id="global-timer" aria-hidden="true"></span>
+      <div id="line-overlays" aria-hidden="true"></div>
     </div>
     <!-- Floating action button and menu -->
     <button id="fab" aria-label="Menu" title="Menu">≡</button>
     <div id="menu" aria-hidden="true">
+      <button data-action="start-5">Start timer 5s</button>
       <button data-action="start-60">Start timer 60s</button>
       <button data-action="start-90">Start timer 90s</button>
       <button data-action="reset">Reset timer</button>
@@ -115,11 +108,28 @@
     const overlayText = document.getElementById('overlay-text');
     const globalTimerEl = document.getElementById('global-timer');
 
-    // Inline small beep (base64 WAV) — short click-like tone
-    const beepData = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+    // Play short percussive 'tuk' using Web Audio API (works reliably)
+    let audioCtx = null;
+    function ensureAudio(){
+      if(!audioCtx){
+        try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ audioCtx = null; }
+      }
+      return audioCtx;
+    }
     function playBeep(){
-      const a = new Audio(beepData);
-      a.play().catch(()=>{});
+      const ctx = ensureAudio();
+      if(!ctx) return; // fallback: no audio
+      const now = ctx.currentTime;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(800, now);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.25, now + 0.001);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(now);
+      o.stop(now + 0.13);
     }
 
     // --- Draggable FAB ---
@@ -138,25 +148,60 @@
       fab.style.right = 'auto'; fab.style.bottom = 'auto';
     });
     fab.addEventListener('pointerup', e=>{ fab.releasePointerCapture(e.pointerId); });
-    // Menu toggle — only on click (not after drag)
-    fab.addEventListener('click', e=>{
+    // Menu control helpers
+    function closeMenu(){ menu.setAttribute('aria-hidden','true'); menu.style.display='none'; }
+    function openMenu(){ menu.setAttribute('aria-hidden','false'); menu.style.display='flex'; }
+    function toggleMenu(){ if(menu.getAttribute('aria-hidden')==='false') closeMenu(); else openMenu(); }
+
+    // Menu toggle — use pointerup for better touch reliability (preserve drag behavior)
+    fab.addEventListener('pointerup', e=>{
+      if(e.isPrimary === false) return;
       if(fabMoved){ fabMoved=false; return; }
-      const open = menu.getAttribute('aria-hidden') === 'false';
-      menu.setAttribute('aria-hidden', String(!open));
-      menu.style.display = open ? 'none' : 'flex';
+      toggleMenu();
     });
+
+    // Touch fallback: some mobile browsers don't fire pointerup reliably for synthetic clicks.
+    // Attach a click handler only when a touch-capable device is detected.
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+    if(isTouch){
+      fab.addEventListener('click', (e)=>{
+        // prevent double-trigger after pointerup drag/tap
+        if(fabMoved){ fabMoved=false; return; }
+        // if menu already visible, let pointerup/click handle closing; otherwise open
+        if(menu.getAttribute('aria-hidden') === 'true') toggleMenu();
+      });
+    }
 
     // Handle menu actions
     menu.addEventListener('click', (e)=>{
       const b = e.target.closest('button');
       if(!b) return;
       const action = b.dataset.action;
+      if(action === 'start-5') startCountdown(5);
       if(action === 'start-60') startCountdown(60);
       if(action === 'start-90') startCountdown(90);
       if(action === 'reset') stopCountdown();
       if(action === 'insert-time') insertCurrentTime();
       if(action === 'insert-word') insertAtCursor(b.dataset.word + ' ');
       menu.setAttribute('aria-hidden','true'); menu.style.display='none';
+    });
+
+    // Close menu when clicking/tapping outside it, or when pressing Escape
+    document.addEventListener('pointerup', (e)=>{
+      if(menu.getAttribute('aria-hidden') === 'true') return;
+      if(e.target.closest && (e.target.closest('#menu') || e.target.closest('#fab'))) return;
+      closeMenu();
+    });
+    // Fallback: also listen for regular clicks (some browsers/events may not fire pointerup reliably)
+    document.addEventListener('click', (e)=>{
+      if(menu.getAttribute('aria-hidden') === 'true') return;
+      if(e.target.closest && (e.target.closest('#menu') || e.target.closest('#fab'))) return;
+      closeMenu();
+    });
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape' && menu.getAttribute('aria-hidden') === 'false'){
+        closeMenu();
+      }
     });
 
     // Countdown overlay
@@ -203,11 +248,108 @@
       fit(); updateDebug();
     }
 
+    // Annotate lines with differences
+    // Format: append " [±HH:MM:SS]" after each line that contains a time;
+    // For last line -> diff = now - thisTime; for others -> diff = nextTime - thisTime
+    const timeRe = /(\d{1,2}):(\d{2})(?::(\d{2}))?/;
+    function toSeconds(h,m,s){ return h*3600 + m*60 + s; }
+    function pad(n){ return String(n).padStart(2,'0'); }
+    function secsToHMS(s){
+      const sign = s<0?'-':'';
+      s = Math.abs(s);
+      const hh = Math.floor(s/3600);
+      const mm = Math.floor((s%3600)/60);
+      const ss = s%60;
+      if(hh === 0) return sign+pad(mm)+':'+pad(ss);
+      return sign+String(hh)+':'+pad(mm)+':'+pad(ss);
+    }
+
+    function annotateLines(){
+      const val = ta.value;
+      const lines = val.split('\n');
+      const cleaned = lines.map(ln => ln.replace(/\s*\[[\-+]?\d{2}:\d{2}:\d{2}\]\s*$/,''));
+      const results = [];
+      for(let i=0;i<cleaned.length;i++){
+        const m = cleaned[i].match(timeRe);
+        if(!m) continue;
+        const curSecs = toSeconds(Number(m[1]), Number(m[2]), Number(m[3]||0));
+        let next = null;
+        for(let j=i+1;j<cleaned.length;j++){
+          const mm = cleaned[j].match(timeRe);
+          if(mm){ next = toSeconds(Number(mm[1]), Number(mm[2]), Number(mm[3]||0)); break; }
+        }
+        let diff;
+        if(next==null){
+          const now = new Date();
+          diff = Math.floor((now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds()) - curSecs);
+        } else {
+          diff = next - curSecs;
+        }
+        results.push({line:i,diff});
+      }
+      // For now we keep annotations internal; future: render overlays using results
+      return results;
+    }
+    // run on input to update internal state; do not modify textarea
+    ta.addEventListener('input', ()=>{ startGlobalIfNeeded(); annotateLines(); renderOverlays(); });
+    window.addEventListener('load', ()=>{ annotateLines(); startGlobalIfNeeded(); renderOverlays(); });
+
+    // Render overlays to the right of each line (small gray, like global timer)
+    const overlaysRoot = document.getElementById('line-overlays');
+    function clearOverlays(){ overlaysRoot.innerHTML = ''; }
+    function renderOverlays(){
+      const items = annotateLines();
+      clearOverlays();
+      if(!items || items.length===0) return;
+      // ensure overlays use exact computed font metrics from textarea
+      const taStyle = getComputedStyle(ta);
+      overlaysRoot.style.fontFamily = taStyle.fontFamily;
+      overlaysRoot.style.fontSize = taStyle.fontSize;
+      overlaysRoot.style.lineHeight = taStyle.lineHeight;
+      globalTimerEl.style.fontFamily = taStyle.fontFamily;
+      globalTimerEl.style.fontSize = taStyle.fontSize;
+      globalTimerEl.style.lineHeight = taStyle.lineHeight;
+      const style = getComputedStyle(ta);
+      const lineHeight = parseFloat(style.lineHeight) || (parseFloat(style.fontSize)*1.5);
+      const paddingTop = parseFloat(style.paddingTop)||0;
+      items.forEach(it => {
+        // skip overlay for first line because global timer is shown there
+        if(it.line === 0) return;
+        const el = document.createElement('div');
+        el.className = 'line-overlay-item';
+        el.textContent = formatHMS(it.diff);
+        el.style.position = 'absolute';
+        const taStyle2 = getComputedStyle(ta);
+        el.style.fontFamily = taStyle2.fontFamily;
+        el.style.fontSize = taStyle2.fontSize;
+        el.style.lineHeight = taStyle2.lineHeight;
+        el.style.color = taStyle2.color;
+        el.style.right = (getComputedStyle(document.documentElement).getPropertyValue('--overlay-right') || '12px').trim();
+        el.style.top = (paddingTop + it.line * lineHeight) + 'px';
+        overlaysRoot.appendChild(el);
+      });
+    }
+
+    // Keep overlays live-updating every second while there are time lines
+    let overlaysInterval = null;
+    function startOverlaysInterval(){
+      if(overlaysInterval) return;
+      overlaysInterval = setInterval(()=>{
+        // only rerender if there are time lines
+        const items = annotateLines();
+        if(items && items.length>0) renderOverlays();
+      },1000);
+    }
+    function stopOverlaysInterval(){ if(overlaysInterval) { clearInterval(overlaysInterval); overlaysInterval=null; } }
+    // start on load
+    startOverlaysInterval();
+
     // Global timer: shows elapsed time since the moment recorded in first line
     let globalInterval = null;
     function parseFirstLineTime(){
       const firstLine = ta.value.split('\n')[0].trim();
-      const m = firstLine.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      // Allow trailing text after the time (e.g. "12:34 some note")
+      const m = firstLine.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
       if(!m) return null;
       const hh = Number(m[1]), mm = Number(m[2]), ss = Number(m[3]||0);
       const t = new Date();
@@ -217,10 +359,11 @@
     function formatHMS(s){
       const sign = s < 0 ? '-' : '';
       s = Math.abs(s);
-      const hh = String(Math.floor(s/3600)).padStart(2,'0');
+      const hh = Math.floor(s/3600);
       const mm = String(Math.floor((s%3600)/60)).padStart(2,'0');
       const sss = String(s%60).padStart(2,'0');
-      return sign+hh+':'+mm+':'+sss;
+      if(hh === 0) return sign+mm+':'+sss;
+      return sign+String(hh)+':'+mm+':'+sss;
     }
     function updateGlobalTimer(){
       const t = parseFirstLineTime();
@@ -228,6 +371,12 @@
       globalTimerEl.style.display = 'block';
       const diff = Math.floor((Date.now() - t.getTime()) / 1000);
       globalTimerEl.textContent = formatHMS(diff);
+      // align vertical position and right offset to overlays
+      const style = getComputedStyle(ta);
+      const lineHeight = parseFloat(style.lineHeight) || (parseFloat(style.fontSize)*1.5);
+      const paddingTop = parseFloat(style.paddingTop)||0;
+      globalTimerEl.style.top = (paddingTop + 0 * lineHeight) + 'px';
+      globalTimerEl.style.right = getComputedStyle(document.documentElement).getPropertyValue('--overlay-right') || '12px';
     }
     function startGlobalIfNeeded(){
       if(globalInterval) clearInterval(globalInterval);
@@ -240,22 +389,43 @@
     window.addEventListener('resize', updateGlobalTimer);
     startGlobalIfNeeded();
 
-    // Отладочная информация: размеры экрана, viewport и textarea
+    // Debug area: hidden by default, show only on errors. Intercept console.error and uncaught errors.
     const dbg = document.getElementById('debug');
+    // Safe updateDebug used by other parts of the code; it's a no-op when debug is hidden.
     function updateDebug(){
-      const winW = window.innerWidth;
-      const winH = window.innerHeight;
-      const docW = document.documentElement.clientWidth;
-      const docH = document.documentElement.clientHeight;
-      const r = ta.getBoundingClientRect();
-      dbg.textContent = `window: ${winW}×${winH}  viewport: ${docW}×${docH}  textarea: ${Math.round(r.width)}×${Math.round(r.height)}`;
+      try{
+        if(!dbg || dbg.style.display === 'none') return;
+        const winW = window.innerWidth;
+        const winH = window.innerHeight;
+        const docW = document.documentElement.clientWidth;
+        const docH = document.documentElement.clientHeight;
+        const r = ta.getBoundingClientRect();
+        dbg.textContent = `window: ${winW}×${winH}  viewport: ${docW}×${docH}  textarea: ${Math.round(r.width)}×${Math.round(r.height)}`;
+      }catch(e){ /* swallow errors in debug updater */ }
     }
-    window.addEventListener('resize', updateDebug);
-    window.addEventListener('orientationchange', updateDebug);
-    ta.addEventListener('input', updateDebug, {passive:true});
-    window.addEventListener('load', updateDebug);
-    // initial
-    updateDebug();
+    function showDebug(msg, isError){
+      dbg.textContent = msg;
+      dbg.style.display = 'block';
+      if(isError){ dbg.style.background = 'rgba(150,0,0,0.8)'; }
+      else { dbg.style.background = 'rgba(0,0,0,0.6)'; }
+    }
+
+    // Capture runtime errors
+    window.addEventListener('error', (ev)=>{
+      try{ showDebug(`Error: ${ev.message} at ${ev.filename || ''}:${ev.lineno || ''}`, true); }catch(e){ /* ignore */ }
+    });
+    // Capture unhandled promise rejections
+    window.addEventListener('unhandledrejection', (ev)=>{
+      try{ showDebug(`UnhandledRejection: ${ev.reason && ev.reason.message ? ev.reason.message : ev.reason}`, true); }catch(e){}
+    });
+    // Wrap console.error to also show debug
+    (function(){
+      const origErr = console.error.bind(console);
+      console.error = function(...args){
+        try{ showDebug(args.map(a=>typeof a==='string'?a:JSON.stringify(a)).join(' '), true); }catch(e){}
+        origErr(...args);
+      };
+    })();
   </script>
   <style>
   /* UI for menu, FAB and overlay */
@@ -263,10 +433,16 @@
   #menu{position:fixed;right:12px;top:72px;display:none;flex-direction:column;background:rgba(255,255,255,0.98);border-radius:8px;padding:8px;box-shadow:0 6px 18px rgba(0,0,0,0.12);z-index:10000;min-width:180px}
   #menu button{background:transparent;border:0;padding:10px 12px;text-align:left;font-size:15px}
   #menu .sep{height:1px;background:#eee;margin:6px 0}
-  #overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:transparent;z-index:10002;pointer-events:none;}
-  #overlay-text{font-size:200px;color:rgba(0,0,0,0.6);background:transparent;padding:6px 0;border-radius:0;pointer-events:none;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;line-height:0.9;letter-spacing:-6px;width:400px;text-align:center}
+  /* Countdown overlay: lift toward top and increase size for visibility above mobile keyboard */
+  #overlay{position:fixed;inset:0;display:none;align-items:flex-start;justify-content:center;padding-top:10vh;background:transparent;z-index:10002;pointer-events:none;}
+  #overlay-text{font-size:400px;color:rgba(0,0,0,0.28);background:transparent;padding:6px 0;border-radius:0;pointer-events:none;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;line-height:0.9;letter-spacing:-6px;width:100%;max-width:720px;text-align:center}
   #ta-wrap{position:relative;width:100%;overflow:visible}
-  #global-timer{display:none;position:absolute;top:0;right:0;background:transparent;color:rgba(0,0,0,0.6);font-size:18px;line-height:1.5;font-family:inherit;padding:0;pointer-events:none;white-space:nowrap;width:400px;max-width:400px;text-align:right;overflow:visible}
+  :root{--overlay-right:12px}
+  #ta-wrap{position:relative;width:100%;overflow:visible}
+  /* match textarea font stack and sizing */
+  #global-timer{display:none;position:absolute;top:0;right:var(--overlay-right);background:transparent;color:rgba(0,0,0,0.6);font-size:18px;line-height:1.5;font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; padding:0 6px;pointer-events:none;white-space:nowrap;text-align:right;overflow:visible}
+  #line-overlays{position:absolute;top:0;right:0;left:0;pointer-events:none}
+  .line-overlay-item{color:rgba(0,0,0,0.6);font-size:18px;font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;line-height:1.5;padding:0 6px;text-align:right;white-space:nowrap;position:absolute;right:var(--overlay-right)}
   @media (prefers-color-scheme: dark){
     #overlay-text{color:rgba(255,255,255,0.65)}
     #global-timer{color:rgba(255,255,255,0.65)}
