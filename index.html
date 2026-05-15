@@ -3,61 +3,139 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Editor — Minimalism</title>
+  <title>GymLog</title>
   <style>
-  /* Абсолютный реальный минимализм (inlined) */
-  :root{color-scheme: light dark}
-  html,body{height:100%;}
-  body{
-    margin:0;
-    background: #fff;
-    color:#000;
+  /* ── Base ── */
+  :root { color-scheme: light dark; --overlay-right: 12px; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #fff; color: #000;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-    -webkit-font-smoothing:antialiased;
-    -moz-osx-font-smoothing:grayscale;
+    -webkit-font-smoothing: antialiased;
   }
-  .wrap{
-    min-height:100vh;
-    display:flex;
-    flex-direction:column;
-    align-items:stretch;
-    justify-content:flex-start;
-    padding:18px; /* небольшая зона для пальцев */
-    box-sizing:border-box;
+  @media (prefers-color-scheme: dark) {
+    body { background: #0b0b0c; color: #e6e6e6; }
+    textarea::placeholder { color: #555; }
   }
-  textarea{
-    width:100%;
-    max-width:100%;
-    box-sizing:border-box;
-    flex:1 1 100%;
-    min-width:0;
-    display:block;
-    resize:none;
-    border:0;
-    outline:0;
-    font-size:18px;
-    line-height:1.5;
-    padding:0;
-    /* allow textarea to occupy full viewport height so tapping lower area focuses it */
+  body.theme-light { background: #fff !important; color: #000 !important; color-scheme: light; }
+  body.theme-dark  { background: #0b0b0c !important; color: #e6e6e6 !important; color-scheme: dark; }
+
+  /* ── Layout ── */
+  .wrap {
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: stretch; padding: 18px; padding-top: 38px; box-sizing: border-box;
+  }
+  #ta-wrap { position: relative; width: 100%; overflow: visible; }
+
+  /* ── Textarea ── */
+  textarea {
+    width: 100%; max-width: 100%; box-sizing: border-box;
+    flex: 1 1 100%; min-width: 0; display: block;
+    resize: none; border: 0; outline: 0;
+    font-size: 18px; line-height: 1.5; padding: 0;
     min-height: calc(100vh - 36px);
-    background:transparent;
-    color:inherit;
-    caret-color: #111;
-    -webkit-appearance:none;
+    background: transparent; color: inherit;
+    caret-color: currentColor; -webkit-appearance: none;
   }
-  textarea::placeholder{color:#999}
+  textarea::placeholder { color: #999; }
+  textarea:-webkit-autofill { background: transparent; }
 
-  /* hidden by default; shown only on errors */
-  #debug{display:none;position:fixed;left:0;right:0;top:0;background:rgba(0,0,0,0.6);color:#fff;font-size:12px;padding:6px 10px;text-align:center;z-index:9999;backdrop-filter: blur(4px);}
-
-  .wrap{padding-top:38px}
-
-  @media (prefers-color-scheme: dark){
-    body{background:#0b0b0c;color:#e6e6e6}
-    textarea::placeholder{color:#666}
+  /* ── Debug bar (errors only) ── */
+  #debug {
+    display: none; position: fixed; inset: 0 0 auto 0;
+    background: rgba(150,0,0,0.85); color: #fff;
+    font-size: 12px; padding: 6px 10px; text-align: center;
+    z-index: 9999; backdrop-filter: blur(4px);
   }
 
-  textarea:-webkit-autofill{background:transparent}
+  /* ── FAB ── */
+  #fab {
+    position: fixed; right: 12px; top: 12px;
+    width: 48px; height: 48px; border-radius: 24px;
+    border: 0; background: #111; color: #fff;
+    font-size: 20px; z-index: 10001; touch-action: none; cursor: grab;
+  }
+  @media (prefers-color-scheme: dark) { #fab { background: #e6e6e6; color: #111; } }
+  body.theme-dark  #fab { background: #e6e6e6; color: #111; }
+  body.theme-light #fab { background: #111 !important; color: #fff !important; }
+
+  /* ── Menu ── */
+  #menu {
+    position: fixed; right: 12px; top: 72px;
+    display: none; flex-direction: column;
+    background: rgba(255,255,255,0.98);
+    border-radius: 8px; padding: 8px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    z-index: 10000; min-width: 180px;
+  }
+  #menu button { background: transparent; border: 0; padding: 10px 12px; text-align: left; font-size: 15px; cursor: pointer; }
+  #menu .sep { height: 1px; background: #eee; margin: 6px 0; }
+  @media (prefers-color-scheme: dark) { #menu { background: rgba(18,18,18,0.95); color: #ddd; } #menu button { color: inherit; } }
+  body.theme-dark #menu { background: rgba(18,18,18,0.95) !important; color: #ddd; }
+  body.theme-dark #menu button { color: inherit; }
+
+  /* ── Countdown overlay ── */
+  #overlay {
+    position: fixed; inset: 0; display: none;
+    align-items: flex-start; justify-content: center; padding-top: 10vh;
+    background: transparent; z-index: 10002; pointer-events: none;
+  }
+  #overlay-text {
+    font-size: 400px;
+    color: rgba(0,0,0,0.28);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+    line-height: 0.9; letter-spacing: -6px;
+    width: 100%; max-width: 720px; text-align: center; pointer-events: none;
+  }
+  @media (prefers-color-scheme: dark) { #overlay-text { color: rgba(255,255,255,0.35); } }
+  body.theme-dark  #overlay-text { color: rgba(255,255,255,0.35) !important; }
+  body.theme-light #overlay-text { color: rgba(0,0,0,0.28) !important; }
+
+  /* ── Right-side timers ── */
+  #global-timer {
+    display: none; position: absolute; top: 0; right: var(--overlay-right);
+    background: transparent; color: rgba(0,0,0,0.5);
+    font-size: 18px; line-height: 1.5; font-family: inherit;
+    padding: 0 6px; pointer-events: none; white-space: nowrap; text-align: right;
+  }
+  #line-overlays { position: absolute; top: 0; right: 0; left: 0; pointer-events: none; }
+  .line-overlay-item {
+    position: absolute; right: var(--overlay-right);
+    color: rgba(0,0,0,0.5); font-size: 18px; line-height: 1.5;
+    font-family: inherit; padding: 0 6px; white-space: nowrap; text-align: right;
+  }
+  @media (prefers-color-scheme: dark) { #global-timer, .line-overlay-item { color: rgba(255,255,255,0.45); } }
+  body.theme-dark  #global-timer, body.theme-dark  .line-overlay-item { color: rgba(255,255,255,0.45); }
+  body.theme-light #global-timer, body.theme-light .line-overlay-item { color: rgba(0,0,0,0.5); }
+
+  /* ── Config modal ── */
+  #config-modal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 20000;
+    align-items: center; justify-content: center;
+  }
+  #config-modal.open { display: flex; }
+  #config-box {
+    background: #fff; color: #000; border-radius: 10px; padding: 16px;
+    width: min(90vw, 420px); display: flex; flex-direction: column; gap: 10px;
+    max-height: 90vh; overflow-y: auto;
+  }
+  body.theme-dark #config-box,
+  @media (prefers-color-scheme: dark) { #config-box { background: #1a1a1c; color: #e6e6e6; } }
+  body.theme-dark #config-box { background: #1a1a1c !important; color: #e6e6e6; }
+  #config-title { font-size: 15px; font-weight: 600; margin: 0; }
+  #config-textarea {
+    width: 100%; box-sizing: border-box;
+    font-family: ui-monospace, monospace; font-size: 13px;
+    border: 1px solid #ccc; border-radius: 6px; padding: 8px;
+    resize: vertical; min-height: 220px; background: inherit; color: inherit;
+  }
+  .config-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .config-actions button { border: 0; border-radius: 6px; padding: 8px 16px; font-size: 14px; cursor: pointer; }
+  #config-save   { background: #111; color: #fff; }
+  #config-cancel { background: #eee; color: #000; }
+  body.theme-dark #config-save   { background: #e6e6e6; color: #111; }
+  body.theme-dark #config-cancel { background: #333; color: #eee; }
   </style>
 </head>
 <body>
@@ -68,386 +146,379 @@
       <span id="global-timer" aria-hidden="true"></span>
       <div id="line-overlays" aria-hidden="true"></div>
     </div>
-    <!-- Floating action button and menu -->
     <button id="fab" aria-label="Menu" title="Menu">≡</button>
-    <div id="menu" aria-hidden="true">
-      <button data-action="start-5">Start timer 5s</button>
-      <button data-action="start-60">Start timer 60s</button>
-      <button data-action="start-90">Start timer 90s</button>
-      <button data-action="reset">Reset timer</button>
-      <div class="sep"></div>
-      <button data-action="insert-time">Insert current time HH:MM:SS</button>
-      <div class="sep"></div>
-      <button data-action="insert-word" data-word="PullUps">Insert PullUps</button>
-      <button data-action="insert-word" data-word="PushUps">Insert PushUps</button>
-      <button data-action="insert-word" data-word="Abs">Insert Abs</button>
-      <button data-action="insert-word" data-word="Lunges">Insert Lunges</button>
-    </div>
-    <!-- Countdown overlay (pointer-events:none — does not block textarea) -->
+    <div id="menu" aria-hidden="true"></div>
     <div id="overlay" aria-hidden="true"><div id="overlay-text"></div></div>
   </main>
+
+  <!-- Config editor modal -->
+  <div id="config-modal" role="dialog" aria-modal="true" aria-label="Edit config">
+    <div id="config-box">
+      <p id="config-title">Config</p>
+      <textarea id="config-textarea" spellcheck="false"></textarea>
+      <div class="config-actions">
+        <button id="config-cancel">Cancel</button>
+        <button id="config-save">Save</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // Авто-увеличивающаяся высота textarea
-    const ta = document.getElementById('editor');
-    function fit() {
-      ta.style.height = 'auto';
-      ta.style.height = (ta.scrollHeight) + 'px';
-    }
-    ta.addEventListener('input', fit, {passive:true});
-    window.addEventListener('load', fit);
-    window.addEventListener('resize', fit);
-    // Save draft in sessionStorage
-    const KEY = 'minimal-editor-draft';
-    ta.value = sessionStorage.getItem(KEY) || '';
-    ta.addEventListener('input', () => sessionStorage.setItem(KEY, ta.value));
+  // ═══════════════════════════════════════════════════════
+  //  CONFIG — parse / load / save
+  // ═══════════════════════════════════════════════════════
 
-    // --- UI elements ---
-    const fab = document.getElementById('fab');
-    const menu = document.getElementById('menu');
-    const overlay = document.getElementById('overlay');
-    const overlayText = document.getElementById('overlay-text');
-    const globalTimerEl = document.getElementById('global-timer');
+  const CONFIG_KEY = 'gymlog-config';
+  const DRAFT_KEY  = 'minimal-editor-draft';
 
-    // Play short percussive 'tuk' using Web Audio API (works reliably)
-    let audioCtx = null;
-    function ensureAudio(){
-      if(!audioCtx){
-        try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ audioCtx = null; }
+  const DEFAULT_CONFIG = `[Timers]
+60
+90
+
+[Inserts]
+PullUps
+PushUps
+Abs
+Lunges
+
+[Misc]
+Font size: 18
+Font size timer: 400
+Theme: Auto`;
+
+  /** Parse plain-text config → { timers[], inserts[], misc{} } */
+  function parseConfig(text) {
+    const cfg = { timers: [], inserts: [], misc: {} };
+    let section = null;
+    for (const raw of text.split('\n')) {
+      const line = raw.trim();
+      if (!line || line.startsWith('//') || line.startsWith('#')) continue;
+      const sec = line.match(/^\[(\w+)\]/);
+      if (sec) { section = sec[1].toLowerCase(); continue; }
+      if (section === 'timers') {
+        const n = parseInt(line, 10);
+        if (!isNaN(n) && n > 0) cfg.timers.push(n);
+      } else if (section === 'inserts') {
+        cfg.inserts.push(line);
+      } else if (section === 'misc') {
+        const kv = line.match(/^(.+?):\s*(.+)$/);
+        if (kv) cfg.misc[kv[1].trim().toLowerCase()] = kv[2].trim();
       }
-      return audioCtx;
     }
-    function playBeep(){
-      const ctx = ensureAudio();
-      if(!ctx) return; // fallback: no audio
-      const now = ctx.currentTime;
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = 'square';
-      o.frequency.setValueAtTime(800, now);
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(0.25, now + 0.001);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
-      o.connect(g); g.connect(ctx.destination);
-      o.start(now);
-      o.stop(now + 0.13);
-    }
-
-    // --- Draggable FAB ---
-    let fabMoved = false, fabOffset = [0,0];
-    fab.addEventListener('pointerdown', e=>{
-      fabMoved = false;
-      fabOffset = [e.clientX - fab.offsetLeft, e.clientY - fab.offsetTop];
-      fab.setPointerCapture(e.pointerId);
-    });
-    fab.addEventListener('pointermove', e=>{
-      if(!(e.buttons & 1)) return;
-      fabMoved = true;
-      let x = Math.max(0, Math.min(window.innerWidth-48, e.clientX - fabOffset[0]));
-      let y = Math.max(0, Math.min(window.innerHeight-48, e.clientY - fabOffset[1]));
-      fab.style.left = x+'px'; fab.style.top = y+'px';
-      fab.style.right = 'auto'; fab.style.bottom = 'auto';
-    });
-    fab.addEventListener('pointerup', e=>{ fab.releasePointerCapture(e.pointerId); });
-    // Menu control helpers
-    function closeMenu(){ menu.setAttribute('aria-hidden','true'); menu.style.display='none'; }
-    function openMenu(){ menu.setAttribute('aria-hidden','false'); menu.style.display='flex'; }
-    function toggleMenu(){ if(menu.getAttribute('aria-hidden')==='false') closeMenu(); else openMenu(); }
-
-    // Menu toggle — use pointerup for better touch reliability (preserve drag behavior)
-    fab.addEventListener('pointerup', e=>{
-      if(e.isPrimary === false) return;
-      if(fabMoved){ fabMoved=false; return; }
-      toggleMenu();
-    });
-
-    // Touch fallback: some mobile browsers don't fire pointerup reliably for synthetic clicks.
-    // Attach a click handler only when a touch-capable device is detected.
-    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
-    if(isTouch){
-      fab.addEventListener('click', (e)=>{
-        // prevent double-trigger after pointerup drag/tap
-        if(fabMoved){ fabMoved=false; return; }
-        // if menu already visible, let pointerup/click handle closing; otherwise open
-        if(menu.getAttribute('aria-hidden') === 'true') toggleMenu();
-      });
-    }
-
-    // Handle menu actions
-    menu.addEventListener('click', (e)=>{
-      const b = e.target.closest('button');
-      if(!b) return;
-      const action = b.dataset.action;
-      if(action === 'start-5') startCountdown(5);
-      if(action === 'start-60') startCountdown(60);
-      if(action === 'start-90') startCountdown(90);
-      if(action === 'reset') stopCountdown();
-      if(action === 'insert-time') insertCurrentTime();
-      if(action === 'insert-word') insertAtCursor(b.dataset.word + ' ');
-      menu.setAttribute('aria-hidden','true'); menu.style.display='none';
-    });
-
-    // Close menu when clicking/tapping outside it, or when pressing Escape
-    document.addEventListener('pointerup', (e)=>{
-      if(menu.getAttribute('aria-hidden') === 'true') return;
-      if(e.target.closest && (e.target.closest('#menu') || e.target.closest('#fab'))) return;
-      closeMenu();
-    });
-    // Fallback: also listen for regular clicks (some browsers/events may not fire pointerup reliably)
-    document.addEventListener('click', (e)=>{
-      if(menu.getAttribute('aria-hidden') === 'true') return;
-      if(e.target.closest && (e.target.closest('#menu') || e.target.closest('#fab'))) return;
-      closeMenu();
-    });
-    window.addEventListener('keydown', (e)=>{
-      if(e.key === 'Escape' && menu.getAttribute('aria-hidden') === 'false'){
-        closeMenu();
-      }
-    });
-
-    // Countdown overlay
-    let countdownTimer = null;
-    function startCountdown(seconds){
-      stopCountdown();
-      let remaining = seconds;
-      overlay.style.display = 'flex';
-      overlay.setAttribute('aria-hidden','false');
-      overlayText.textContent = formatSeconds(remaining);
-      countdownTimer = setInterval(()=>{
-        remaining -= 1;
-        if(remaining <= 0){ stopCountdown(); playBeep(); }
-        else overlayText.textContent = formatSeconds(remaining);
-      },1000);
-    }
-    function stopCountdown(){
-      if(countdownTimer) clearInterval(countdownTimer);
-      countdownTimer = null;
-      overlay.style.display = 'none';
-      overlay.setAttribute('aria-hidden','true');
-    }
-
-    function formatSeconds(s){
-      return String(s);
-    }
-
-    function insertCurrentTime(){
-      const d = new Date();
-      const hh = String(d.getHours()).padStart(2,'0');
-      const mm = String(d.getMinutes()).padStart(2,'0');
-      const ss = String(d.getSeconds()).padStart(2,'0');
-      insertAtCursor(`${hh}:${mm}:${ss} `);
-    }
-
-    function insertAtCursor(text){
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const val = ta.value;
-      ta.value = val.slice(0,start) + text + val.slice(end);
-      const pos = start + text.length;
-      ta.selectionStart = ta.selectionEnd = pos;
-      ta.focus();
-      fit(); updateDebug();
-    }
-
-    // Annotate lines with differences
-    // Format: append " [±HH:MM:SS]" after each line that contains a time;
-    // For last line -> diff = now - thisTime; for others -> diff = nextTime - thisTime
-    const timeRe = /(\d{1,2}):(\d{2})(?::(\d{2}))?/;
-    function toSeconds(h,m,s){ return h*3600 + m*60 + s; }
-    function pad(n){ return String(n).padStart(2,'0'); }
-    function secsToHMS(s){
-      const sign = s<0?'-':'';
-      s = Math.abs(s);
-      const hh = Math.floor(s/3600);
-      const mm = Math.floor((s%3600)/60);
-      const ss = s%60;
-      if(hh === 0) return sign+pad(mm)+':'+pad(ss);
-      return sign+String(hh)+':'+pad(mm)+':'+pad(ss);
-    }
-
-    function annotateLines(){
-      const val = ta.value;
-      const lines = val.split('\n');
-      const cleaned = lines.map(ln => ln.replace(/\s*\[[\-+]?\d{2}:\d{2}:\d{2}\]\s*$/,''));
-      const results = [];
-      for(let i=0;i<cleaned.length;i++){
-        const m = cleaned[i].match(timeRe);
-        if(!m) continue;
-        const curSecs = toSeconds(Number(m[1]), Number(m[2]), Number(m[3]||0));
-        let next = null;
-        for(let j=i+1;j<cleaned.length;j++){
-          const mm = cleaned[j].match(timeRe);
-          if(mm){ next = toSeconds(Number(mm[1]), Number(mm[2]), Number(mm[3]||0)); break; }
-        }
-        let diff;
-        if(next==null){
-          const now = new Date();
-          diff = Math.floor((now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds()) - curSecs);
-        } else {
-          diff = next - curSecs;
-        }
-        results.push({line:i,diff});
-      }
-      // For now we keep annotations internal; future: render overlays using results
-      return results;
-    }
-    // run on input to update internal state; do not modify textarea
-    ta.addEventListener('input', ()=>{ startGlobalIfNeeded(); annotateLines(); renderOverlays(); });
-    window.addEventListener('load', ()=>{ annotateLines(); startGlobalIfNeeded(); renderOverlays(); });
-
-    // Render overlays to the right of each line (small gray, like global timer)
-    const overlaysRoot = document.getElementById('line-overlays');
-    function clearOverlays(){ overlaysRoot.innerHTML = ''; }
-    function renderOverlays(){
-      const items = annotateLines();
-      clearOverlays();
-      if(!items || items.length===0) return;
-      // ensure overlays use exact computed font metrics from textarea
-      const taStyle = getComputedStyle(ta);
-      overlaysRoot.style.fontFamily = taStyle.fontFamily;
-      overlaysRoot.style.fontSize = taStyle.fontSize;
-      overlaysRoot.style.lineHeight = taStyle.lineHeight;
-      globalTimerEl.style.fontFamily = taStyle.fontFamily;
-      globalTimerEl.style.fontSize = taStyle.fontSize;
-      globalTimerEl.style.lineHeight = taStyle.lineHeight;
-      const style = getComputedStyle(ta);
-      const lineHeight = parseFloat(style.lineHeight) || (parseFloat(style.fontSize)*1.5);
-      const paddingTop = parseFloat(style.paddingTop)||0;
-      items.forEach(it => {
-        // skip overlay for first line because global timer is shown there
-        if(it.line === 0) return;
-        const el = document.createElement('div');
-        el.className = 'line-overlay-item';
-        el.textContent = formatHMS(it.diff);
-        el.style.position = 'absolute';
-        const taStyle2 = getComputedStyle(ta);
-        el.style.fontFamily = taStyle2.fontFamily;
-        el.style.fontSize = taStyle2.fontSize;
-        el.style.lineHeight = taStyle2.lineHeight;
-        el.style.color = taStyle2.color;
-        el.style.right = (getComputedStyle(document.documentElement).getPropertyValue('--overlay-right') || '12px').trim();
-        el.style.top = (paddingTop + it.line * lineHeight) + 'px';
-        overlaysRoot.appendChild(el);
-      });
-    }
-
-    // Keep overlays live-updating every second while there are time lines
-    let overlaysInterval = null;
-    function startOverlaysInterval(){
-      if(overlaysInterval) return;
-      overlaysInterval = setInterval(()=>{
-        // only rerender if there are time lines
-        const items = annotateLines();
-        if(items && items.length>0) renderOverlays();
-      },1000);
-    }
-    function stopOverlaysInterval(){ if(overlaysInterval) { clearInterval(overlaysInterval); overlaysInterval=null; } }
-    // start on load
-    startOverlaysInterval();
-
-    // Global timer: shows elapsed time since the moment recorded in first line
-    let globalInterval = null;
-    function parseFirstLineTime(){
-      const firstLine = ta.value.split('\n')[0].trim();
-      // Allow trailing text after the time (e.g. "12:34 some note")
-      const m = firstLine.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-      if(!m) return null;
-      const hh = Number(m[1]), mm = Number(m[2]), ss = Number(m[3]||0);
-      const t = new Date();
-      t.setHours(hh, mm, ss, 0);
-      return t;
-    }
-    function formatHMS(s){
-      const sign = s < 0 ? '-' : '';
-      s = Math.abs(s);
-      const hh = Math.floor(s/3600);
-      const mm = String(Math.floor((s%3600)/60)).padStart(2,'0');
-      const sss = String(s%60).padStart(2,'0');
-      if(hh === 0) return sign+mm+':'+sss;
-      return sign+String(hh)+':'+mm+':'+sss;
-    }
-    function updateGlobalTimer(){
-      const t = parseFirstLineTime();
-      if(!t){ globalTimerEl.style.display='none'; return; }
-      globalTimerEl.style.display = 'block';
-      const diff = Math.floor((Date.now() - t.getTime()) / 1000);
-      globalTimerEl.textContent = formatHMS(diff);
-      // align vertical position and right offset to overlays
-      const style = getComputedStyle(ta);
-      const lineHeight = parseFloat(style.lineHeight) || (parseFloat(style.fontSize)*1.5);
-      const paddingTop = parseFloat(style.paddingTop)||0;
-      globalTimerEl.style.top = (paddingTop + 0 * lineHeight) + 'px';
-      globalTimerEl.style.right = getComputedStyle(document.documentElement).getPropertyValue('--overlay-right') || '12px';
-    }
-    function startGlobalIfNeeded(){
-      if(globalInterval) clearInterval(globalInterval);
-      updateGlobalTimer();
-      const t = parseFirstLineTime();
-      if(!t) return;
-      globalInterval = setInterval(updateGlobalTimer, 1000);
-    }
-    ta.addEventListener('input', startGlobalIfNeeded);
-    window.addEventListener('resize', updateGlobalTimer);
-    startGlobalIfNeeded();
-
-    // Debug area: hidden by default, show only on errors. Intercept console.error and uncaught errors.
-    const dbg = document.getElementById('debug');
-    // Safe updateDebug used by other parts of the code; it's a no-op when debug is hidden.
-    function updateDebug(){
-      try{
-        if(!dbg || dbg.style.display === 'none') return;
-        const winW = window.innerWidth;
-        const winH = window.innerHeight;
-        const docW = document.documentElement.clientWidth;
-        const docH = document.documentElement.clientHeight;
-        const r = ta.getBoundingClientRect();
-        dbg.textContent = `window: ${winW}×${winH}  viewport: ${docW}×${docH}  textarea: ${Math.round(r.width)}×${Math.round(r.height)}`;
-      }catch(e){ /* swallow errors in debug updater */ }
-    }
-    function showDebug(msg, isError){
-      dbg.textContent = msg;
-      dbg.style.display = 'block';
-      if(isError){ dbg.style.background = 'rgba(150,0,0,0.8)'; }
-      else { dbg.style.background = 'rgba(0,0,0,0.6)'; }
-    }
-
-    // Capture runtime errors
-    window.addEventListener('error', (ev)=>{
-      try{ showDebug(`Error: ${ev.message} at ${ev.filename || ''}:${ev.lineno || ''}`, true); }catch(e){ /* ignore */ }
-    });
-    // Capture unhandled promise rejections
-    window.addEventListener('unhandledrejection', (ev)=>{
-      try{ showDebug(`UnhandledRejection: ${ev.reason && ev.reason.message ? ev.reason.message : ev.reason}`, true); }catch(e){}
-    });
-    // Wrap console.error to also show debug
-    (function(){
-      const origErr = console.error.bind(console);
-      console.error = function(...args){
-        try{ showDebug(args.map(a=>typeof a==='string'?a:JSON.stringify(a)).join(' '), true); }catch(e){}
-        origErr(...args);
-      };
-    })();
-  </script>
-  <style>
-  /* UI for menu, FAB and overlay */
-  #fab{position:fixed;right:12px;top:12px;width:48px;height:48px;border-radius:24px;border:0;background:#111;color:#fff;font-size:20px;z-index:10001;touch-action:none;cursor:grab;}
-  #menu{position:fixed;right:12px;top:72px;display:none;flex-direction:column;background:rgba(255,255,255,0.98);border-radius:8px;padding:8px;box-shadow:0 6px 18px rgba(0,0,0,0.12);z-index:10000;min-width:180px}
-  #menu button{background:transparent;border:0;padding:10px 12px;text-align:left;font-size:15px}
-  #menu .sep{height:1px;background:#eee;margin:6px 0}
-  /* Countdown overlay: lift toward top and increase size for visibility above mobile keyboard */
-  #overlay{position:fixed;inset:0;display:none;align-items:flex-start;justify-content:center;padding-top:10vh;background:transparent;z-index:10002;pointer-events:none;}
-  #overlay-text{font-size:400px;color:rgba(0,0,0,0.28);background:transparent;padding:6px 0;border-radius:0;pointer-events:none;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;line-height:0.9;letter-spacing:-6px;width:100%;max-width:720px;text-align:center}
-  #ta-wrap{position:relative;width:100%;overflow:visible}
-  :root{--overlay-right:12px}
-  #ta-wrap{position:relative;width:100%;overflow:visible}
-  /* match textarea font stack and sizing */
-  #global-timer{display:none;position:absolute;top:0;right:var(--overlay-right);background:transparent;color:rgba(0,0,0,0.6);font-size:18px;line-height:1.5;font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; padding:0 6px;pointer-events:none;white-space:nowrap;text-align:right;overflow:visible}
-  #line-overlays{position:absolute;top:0;right:0;left:0;pointer-events:none}
-  .line-overlay-item{color:rgba(0,0,0,0.6);font-size:18px;font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;line-height:1.5;padding:0 6px;text-align:right;white-space:nowrap;position:absolute;right:var(--overlay-right)}
-  @media (prefers-color-scheme: dark){
-    #overlay-text{color:rgba(255,255,255,0.65)}
-    #global-timer{color:rgba(255,255,255,0.65)}
+    return cfg;
   }
-  @media (prefers-color-scheme: dark){#menu{background:rgba(18,18,18,0.95);color:#ddd}#menu button{color:inherit}#fab{background:#e6e6e6;color:#111}}
-  </style>
+
+  function loadConfigText() { return localStorage.getItem(CONFIG_KEY) || DEFAULT_CONFIG; }
+  function saveConfigText(t) { localStorage.setItem(CONFIG_KEY, t); }
+
+  let cfg = parseConfig(loadConfigText());
+
+  // ═══════════════════════════════════════════════════════
+  //  MISC SETTINGS — font size, timer size, theme
+  // ═══════════════════════════════════════════════════════
+
+  const ta          = document.getElementById('editor');
+  const overlayText = document.getElementById('overlay-text');
+
+  function applyMisc() {
+    const fs = parseInt(cfg.misc['font size'], 10);
+    if (!isNaN(fs) && fs > 0) ta.style.fontSize = fs + 'px';
+
+    const ft = parseInt(cfg.misc['font size timer'], 10);
+    if (!isNaN(ft) && ft > 0) overlayText.style.fontSize = ft + 'px';
+
+    const theme = (cfg.misc['theme'] || 'auto').toLowerCase();
+    document.body.classList.remove('theme-light', 'theme-dark');
+    if (theme === 'light') document.body.classList.add('theme-light');
+    if (theme === 'dark')  document.body.classList.add('theme-dark');
+  }
+
+  applyMisc();
+
+  // ═══════════════════════════════════════════════════════
+  //  TEXTAREA — auto-resize & draft persistence
+  // ═══════════════════════════════════════════════════════
+
+  function fit() { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+  ta.addEventListener('input', fit, { passive: true });
+  window.addEventListener('load', fit);
+  window.addEventListener('resize', fit);
+
+  ta.value = localStorage.getItem(DRAFT_KEY) || '';
+  ta.addEventListener('input', () => localStorage.setItem(DRAFT_KEY, ta.value));
+
+  // ═══════════════════════════════════════════════════════
+  //  AUDIO — Web Audio percussive beep
+  // ═══════════════════════════════════════════════════════
+
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {}
+    return audioCtx;
+  }
+  function playBeep() {
+    const ctx = ensureAudio(); if (!ctx) return;
+    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'square';
+    o.frequency.setValueAtTime(800, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.25,  t + 0.001);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t); o.stop(t + 0.13);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  FAB — draggable floating button
+  // ═══════════════════════════════════════════════════════
+
+  const fab  = document.getElementById('fab');
+  const menu = document.getElementById('menu');
+  let fabMoved = false, fabOffset = [0, 0];
+
+  fab.addEventListener('pointerdown', e => {
+    fabMoved = false;
+    fabOffset = [e.clientX - fab.offsetLeft, e.clientY - fab.offsetTop];
+    fab.setPointerCapture(e.pointerId);
+  });
+  fab.addEventListener('pointermove', e => {
+    if (!(e.buttons & 1)) return;
+    fabMoved = true;
+    fab.style.left   = Math.max(0, Math.min(window.innerWidth  - 48, e.clientX - fabOffset[0])) + 'px';
+    fab.style.top    = Math.max(0, Math.min(window.innerHeight - 48, e.clientY - fabOffset[1])) + 'px';
+    fab.style.right  = 'auto'; fab.style.bottom = 'auto';
+  });
+  fab.addEventListener('pointerup', e => {
+    fab.releasePointerCapture(e.pointerId);
+    if (e.isPrimary === false) return;
+    if (fabMoved) { fabMoved = false; return; }
+    toggleMenu();
+  });
+  // Touch fallback (some browsers need click after pointerup)
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+    fab.addEventListener('click', () => {
+      if (fabMoved) { fabMoved = false; return; }
+      if (menu.getAttribute('aria-hidden') === 'true') toggleMenu();
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  MENU — build from config, open / close
+  // ═══════════════════════════════════════════════════════
+
+  function closeMenu() { menu.setAttribute('aria-hidden', 'true');  menu.style.display = 'none'; }
+  function openMenu()  { menu.setAttribute('aria-hidden', 'false'); menu.style.display = 'flex'; }
+  function toggleMenu() { menu.getAttribute('aria-hidden') === 'false' ? closeMenu() : openMenu(); }
+
+  function buildMenu() {
+    menu.innerHTML = '';
+    cfg.timers.forEach(s => addMenuBtn(`Start timer ${s}s`, () => startCountdown(s)));
+    addMenuBtn('Reset timer', stopCountdown);
+    addSep();
+    addMenuBtn('Insert current time', insertCurrentTime);
+    addSep();
+    cfg.inserts.forEach(w => addMenuBtn(`Insert ${w}`, () => insertAtCursor(w + ' ')));
+    addSep();
+    addMenuBtn('Edit config…', openConfigModal);
+  }
+
+  function addMenuBtn(label, handler) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('click', () => { closeMenu(); handler(); });
+    menu.appendChild(b);
+  }
+  function addSep() { const s = document.createElement('div'); s.className = 'sep'; menu.appendChild(s); }
+
+  // Close on outside interaction or Escape
+  document.addEventListener('pointerup', e => {
+    if (menu.getAttribute('aria-hidden') === 'true') return;
+    if (e.target.closest?.('#menu') || e.target.closest?.('#fab')) return;
+    closeMenu();
+  });
+  document.addEventListener('click', e => {
+    if (menu.getAttribute('aria-hidden') === 'true') return;
+    if (e.target.closest?.('#menu') || e.target.closest?.('#fab')) return;
+    closeMenu();
+  });
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenu(); closeConfigModal(); } });
+
+  buildMenu();
+
+  // ═══════════════════════════════════════════════════════
+  //  CONFIG MODAL
+  // ═══════════════════════════════════════════════════════
+
+  const configModal     = document.getElementById('config-modal');
+  const configTextarea  = document.getElementById('config-textarea');
+  const configSaveBtn   = document.getElementById('config-save');
+  const configCancelBtn = document.getElementById('config-cancel');
+
+  function openConfigModal()  { configTextarea.value = loadConfigText(); configModal.classList.add('open'); configTextarea.focus(); }
+  function closeConfigModal() { configModal.classList.remove('open'); }
+
+  configSaveBtn.addEventListener('click', () => {
+    const text = configTextarea.value;
+    saveConfigText(text);
+    cfg = parseConfig(text);
+    applyMisc(); buildMenu(); renderOverlays(); updateGlobalTimer();
+    closeConfigModal();
+  });
+  configCancelBtn.addEventListener('click', closeConfigModal);
+  configModal.addEventListener('click', e => { if (e.target === configModal) closeConfigModal(); });
+
+  // ═══════════════════════════════════════════════════════
+  //  COUNTDOWN OVERLAY
+  // ═══════════════════════════════════════════════════════
+
+  const overlay = document.getElementById('overlay');
+  let countdownTimer = null;
+
+  function startCountdown(seconds) {
+    stopCountdown();
+    let remaining = seconds;
+    overlay.style.display = 'flex'; overlay.setAttribute('aria-hidden', 'false');
+    overlayText.textContent = remaining;
+    countdownTimer = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) { stopCountdown(); playBeep(); }
+      else overlayText.textContent = remaining;
+    }, 1000);
+  }
+  function stopCountdown() {
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = null;
+    overlay.style.display = 'none'; overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  INSERT HELPERS
+  // ═══════════════════════════════════════════════════════
+
+  function insertCurrentTime() {
+    const d = new Date();
+    insertAtCursor(`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} `);
+  }
+  function insertAtCursor(text) {
+    const s = ta.selectionStart, e = ta.selectionEnd;
+    ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
+    ta.selectionStart = ta.selectionEnd = s + text.length;
+    ta.focus(); fit();
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  TIME UTILITIES
+  // ═══════════════════════════════════════════════════════
+
+  const timeRe = /(\d{1,2}):(\d{2})(?::(\d{2}))?/;
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function toSeconds(h, m, s) { return h * 3600 + m * 60 + (s || 0); }
+  function formatHMS(s) {
+    const sign = s < 0 ? '-' : '';
+    s = Math.abs(s);
+    const h = Math.floor(s / 3600), m = String(Math.floor((s % 3600) / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
+    return h > 0 ? `${sign}${h}:${m}:${ss}` : `${sign}${m}:${ss}`;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  LINE OVERLAYS — per-line time diffs (right side)
+  // ═══════════════════════════════════════════════════════
+
+  const overlaysRoot  = document.getElementById('line-overlays');
+  const globalTimerEl = document.getElementById('global-timer');
+
+  /** Compute {line, diff} pairs without touching textarea content */
+  function computeLineDiffs() {
+    const lines = ta.value.split('\n');
+    const results = [];
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(timeRe);
+      if (!m) continue;
+      const cur = toSeconds(+m[1], +m[2], +m[3]);
+      let next = null;
+      for (let j = i + 1; j < lines.length; j++) {
+        const n = lines[j].match(timeRe);
+        if (n) { next = toSeconds(+n[1], +n[2], +n[3]); break; }
+      }
+      const diff = next != null
+        ? next - cur
+        : (() => { const now = new Date(); return Math.floor(now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() - cur); })();
+      results.push({ line: i, diff });
+    }
+    return results;
+  }
+
+  function renderOverlays() {
+    overlaysRoot.innerHTML = '';
+    const diffs = computeLineDiffs();
+    if (!diffs.length) return;
+
+    const style      = getComputedStyle(ta);
+    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5;
+    const paddingTop = parseFloat(style.paddingTop) || 0;
+
+    // Sync global-timer font with textarea
+    Object.assign(globalTimerEl.style, { fontFamily: style.fontFamily, fontSize: style.fontSize, lineHeight: style.lineHeight });
+
+    diffs.forEach(({ line, diff }) => {
+      if (line === 0) return; // first line → global-timer handles it
+      const el = document.createElement('div');
+      el.className    = 'line-overlay-item';
+      el.textContent  = formatHMS(diff);
+      el.style.top    = (paddingTop + line * lineHeight) + 'px';
+      Object.assign(el.style, { fontFamily: style.fontFamily, fontSize: style.fontSize, lineHeight: style.lineHeight, color: style.color });
+      overlaysRoot.appendChild(el);
+    });
+  }
+
+  setInterval(() => { if (computeLineDiffs().length) renderOverlays(); }, 1000);
+  ta.addEventListener('input', () => { renderOverlays(); startGlobalIfNeeded(); });
+  window.addEventListener('load', () => { renderOverlays(); startGlobalIfNeeded(); });
+
+  // ═══════════════════════════════════════════════════════
+  //  GLOBAL TIMER — count-up from time in first line
+  // ═══════════════════════════════════════════════════════
+
+  let globalInterval = null;
+
+  function parseFirstLineTime() {
+    const m = ta.value.split('\n')[0].trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (!m) return null;
+    const t = new Date(); t.setHours(+m[1], +m[2], +(m[3] || 0), 0); return t;
+  }
+  function updateGlobalTimer() {
+    const t = parseFirstLineTime();
+    if (!t) { globalTimerEl.style.display = 'none'; return; }
+    globalTimerEl.style.display  = 'block';
+    globalTimerEl.textContent    = formatHMS(Math.floor((Date.now() - t.getTime()) / 1000));
+    const style = getComputedStyle(ta);
+    globalTimerEl.style.top   = (parseFloat(style.paddingTop) || 0) + 'px';
+    globalTimerEl.style.right = getComputedStyle(document.documentElement).getPropertyValue('--overlay-right') || '12px';
+  }
+  function startGlobalIfNeeded() {
+    if (globalInterval) clearInterval(globalInterval);
+    updateGlobalTimer();
+    if (parseFirstLineTime()) globalInterval = setInterval(updateGlobalTimer, 1000);
+  }
+
+  ta.addEventListener('input', startGlobalIfNeeded);
+  window.addEventListener('resize', updateGlobalTimer);
+  startGlobalIfNeeded();
+
+  // ═══════════════════════════════════════════════════════
+  //  ERROR DEBUG BAR — hidden until an error occurs
+  // ═══════════════════════════════════════════════════════
+
+  const dbg = document.getElementById('debug');
+  function showDebug(msg) { dbg.textContent = msg; dbg.style.display = 'block'; }
+  function updateDebug() {} // no-op kept for compatibility
+
+  window.addEventListener('error', ev => { try { showDebug(`Error: ${ev.message}  ${ev.filename}:${ev.lineno}`); } catch (_) {} });
+  window.addEventListener('unhandledrejection', ev => { try { showDebug(`Unhandled: ${ev.reason?.message ?? ev.reason}`); } catch (_) {} });
+  (function () {
+    const orig = console.error.bind(console);
+    console.error = (...args) => { try { showDebug(args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ')); } catch (_) {} orig(...args); };
+  })();
+  </script>
 </body>
 </html>
