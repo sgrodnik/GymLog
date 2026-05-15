@@ -1,5 +1,7 @@
 ### Minimal text editor with string inserts and timers (MVP)
 
+[Open online](https://sgrodnik.github.io/GymLog/)
+
 - Simple text area with session-persistent draft saving.
 - Floating action button with a compact menu for inserting quick configurable tokens and triggering a fullscreen timer.
 - If a line starts with HH:MM, a live timer appears to the right of that line as an overlay - the original text is not modified.
