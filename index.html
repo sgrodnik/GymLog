@@ -69,6 +69,7 @@
     z-index: 10000; min-width: 180px;
   }
   #menu button { background: transparent; border: 0; padding: 10px 12px; text-align: left; font-size: 15px; cursor: pointer; }
+  #menu button:disabled { opacity: 0.35; cursor: default; }
   #menu .sep { height: 1px; background: #eee; margin: 6px 0; }
   @media (prefers-color-scheme: dark) { #menu { background: rgba(18,18,18,0.95); color: #ddd; } #menu button { color: inherit; } }
   body.theme-dark #menu { background: rgba(18,18,18,0.95) !important; color: #ddd; }
@@ -245,7 +246,54 @@ Theme: Auto`;
   window.addEventListener('resize', fit);
 
   ta.value = localStorage.getItem(DRAFT_KEY) || '';
-  ta.addEventListener('input', () => localStorage.setItem(DRAFT_KEY, ta.value));
+
+  // Debounced draft save (user typing) + immediate helper for programmatic inserts
+  let _draftTimer = null;
+  function saveDraft() { localStorage.setItem(DRAFT_KEY, ta.value); }
+  function saveDraftDebounced() { clearTimeout(_draftTimer); _draftTimer = setTimeout(saveDraft, 1000); }
+  ta.addEventListener('input', saveDraftDebounced);
+
+  // ═══════════════════════════════════════════════════════
+  //  HISTORY — undo / redo stack for mobile menu
+  // ═══════════════════════════════════════════════════════
+
+  const HISTORY_LIMIT = 100;
+  let histStack = [ta.value];
+  let histPtr   = 0;
+  let _histTimer = null;
+
+  function pushHistory(text) {
+    if (text === histStack[histPtr]) return;
+    histStack = histStack.slice(0, histPtr + 1);
+    histStack.push(text);
+    if (histStack.length > HISTORY_LIMIT) histStack.shift(); else histPtr++;
+  }
+  function pushHistoryDebounced() { clearTimeout(_histTimer); _histTimer = setTimeout(() => pushHistory(ta.value), 1000); }
+
+  function histLabel(fromPtr, toPtr) {
+    const from = histStack[fromPtr] || '';
+    const to   = histStack[toPtr]   || '';
+    const chars = Math.abs(from.length - to.length);
+    const lines = Math.abs(from.split('\n').length - to.split('\n').length);
+    return lines > 0 ? `${chars} | ${lines}` : `${chars}`;
+  }
+
+  function undo() {
+    if (histPtr <= 0) return;
+    histPtr--;
+    ta.value = histStack[histPtr];
+    ta.selectionStart = ta.selectionEnd = ta.value.length;
+    fit(); saveDraft(); renderOverlays(); startGlobalIfNeeded();
+  }
+  function redo() {
+    if (histPtr >= histStack.length - 1) return;
+    histPtr++;
+    ta.value = histStack[histPtr];
+    ta.selectionStart = ta.selectionEnd = ta.value.length;
+    fit(); saveDraft(); renderOverlays(); startGlobalIfNeeded();
+  }
+
+  ta.addEventListener('input', pushHistoryDebounced);
 
   // ═══════════════════════════════════════════════════════
   //  AUDIO — Web Audio percussive beep
@@ -307,11 +355,16 @@ Theme: Auto`;
   // ═══════════════════════════════════════════════════════
 
   function closeMenu() { menu.setAttribute('aria-hidden', 'true');  menu.style.display = 'none'; }
-  function openMenu()  { menu.setAttribute('aria-hidden', 'false'); menu.style.display = 'flex'; }
+  function openMenu()  { buildMenu(); menu.setAttribute('aria-hidden', 'false'); menu.style.display = 'flex'; }
   function toggleMenu() { menu.getAttribute('aria-hidden') === 'false' ? closeMenu() : openMenu(); }
 
   function buildMenu() {
     menu.innerHTML = '';
+    const canUndo = histPtr > 0;
+    const canRedo = histPtr < histStack.length - 1;
+    addMenuBtn(canUndo ? `↩ Undo | ${histLabel(histPtr, histPtr - 1)}` : '↩ Undo', undo, !canUndo);
+    addMenuBtn(canRedo ? `↪ Redo | ${histLabel(histPtr, histPtr + 1)}` : '↪ Redo', redo, !canRedo);
+    addSep();
     cfg.timers.forEach(s => addMenuBtn(`Start timer ${s}s`, () => startCountdown(s)));
     addMenuBtn('Reset timer', stopCountdown);
     addSep();
@@ -322,9 +375,10 @@ Theme: Auto`;
     addMenuBtn('Edit config…', openConfigModal);
   }
 
-  function addMenuBtn(label, handler) {
+  function addMenuBtn(label, handler, disabled = false) {
     const b = document.createElement('button');
     b.textContent = label;
+    b.disabled = disabled;
     b.addEventListener('click', () => { closeMenu(); handler(); });
     menu.appendChild(b);
   }
@@ -404,6 +458,8 @@ Theme: Auto`;
     ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
     ta.selectionStart = ta.selectionEnd = s + text.length;
     ta.focus(); fit();
+    saveDraft();
+    pushHistory(ta.value);
   }
 
   // ═══════════════════════════════════════════════════════
