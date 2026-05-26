@@ -49,19 +49,26 @@
   }
 
   /* ── FAB ── */
-  #fab {
+  #fab-group {
     position: fixed; right: 12px; top: 12px;
-    width: 48px; height: 48px; border-radius: 24px;
-    border: 0; background: #111; color: #fff;
-    font-size: 20px; z-index: 10001; touch-action: none; cursor: grab;
+    display: flex; flex-direction: column; gap: 8px;
+    z-index: 10001; touch-action: none;
   }
-  @media (prefers-color-scheme: dark) { #fab { background: #e6e6e6; color: #111; } }
-  body.theme-dark  #fab { background: #e6e6e6; color: #111; }
-  body.theme-light #fab { background: #111 !important; color: #fff !important; }
+  #fab, #fab-time, #fab-timer {
+    width: 56px; height: 56px; border-radius: 28px;
+    border: 0; background: #111; color: #fff;
+    display: block;
+  }
+  #fab      { font-size: 20px; cursor: grab; }
+  #fab-time { font-size: 20px; cursor: pointer; }
+  #fab-timer{ font-size: 15px; cursor: pointer; }
+  @media (prefers-color-scheme: dark) { #fab, #fab-time, #fab-timer { background: #e6e6e6; color: #111; } }
+  body.theme-dark  #fab, body.theme-dark  #fab-time, body.theme-dark  #fab-timer { background: #e6e6e6; color: #111; }
+  body.theme-light #fab, body.theme-light #fab-time, body.theme-light #fab-timer { background: #111 !important; color: #fff !important; }
 
   /* ── Menu ── */
   #menu {
-    position: fixed; right: 12px; top: 72px;
+    position: fixed; right: 12px; top: 208px;
     display: none; flex-direction: column;
     background: rgba(255,255,255,0.98);
     border-radius: 8px; padding: 8px;
@@ -147,7 +154,11 @@
       <span id="global-timer" aria-hidden="true"></span>
       <div id="line-overlays" aria-hidden="true"></div>
     </div>
-    <button id="fab" aria-label="Menu" title="Menu">≡</button>
+    <div id="fab-group">
+      <button id="fab" aria-label="Menu" title="Menu">≡</button>
+      <button id="fab-time" aria-label="Insert time" title="Insert current time">+</button>
+      <button id="fab-timer" aria-label="Start timer" title="Start timer">▶</button>
+    </div>
     <div id="menu" aria-hidden="true"></div>
     <div id="overlay" aria-hidden="true"><div id="overlay-text"></div></div>
   </main>
@@ -240,7 +251,14 @@ Theme: Auto`;
   //  TEXTAREA — auto-resize & draft persistence
   // ═══════════════════════════════════════════════════════
 
-  function fit() { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+  function fit() {
+    if (ta.scrollHeight > ta.clientHeight) {
+      ta.style.height = ta.scrollHeight + 'px';
+    } else {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    }
+  }
   ta.addEventListener('input', fit, { passive: true });
   window.addEventListener('load', fit);
   window.addEventListener('resize', fit);
@@ -320,21 +338,22 @@ Theme: Auto`;
   //  FAB — draggable floating button
   // ═══════════════════════════════════════════════════════
 
-  const fab  = document.getElementById('fab');
+  const fab      = document.getElementById('fab');
+  const fabGroup  = document.getElementById('fab-group');
   const menu = document.getElementById('menu');
   let fabMoved = false, fabOffset = [0, 0];
 
   fab.addEventListener('pointerdown', e => {
     fabMoved = false;
-    fabOffset = [e.clientX - fab.offsetLeft, e.clientY - fab.offsetTop];
+    fabOffset = [e.clientX - fabGroup.offsetLeft, e.clientY - fabGroup.offsetTop];
     fab.setPointerCapture(e.pointerId);
   });
   fab.addEventListener('pointermove', e => {
     if (!(e.buttons & 1)) return;
     fabMoved = true;
-    fab.style.left   = Math.max(0, Math.min(window.innerWidth  - 48, e.clientX - fabOffset[0])) + 'px';
-    fab.style.top    = Math.max(0, Math.min(window.innerHeight - 48, e.clientY - fabOffset[1])) + 'px';
-    fab.style.right  = 'auto'; fab.style.bottom = 'auto';
+    fabGroup.style.left   = Math.max(0, Math.min(window.innerWidth  - fabGroup.offsetWidth,  e.clientX - fabOffset[0])) + 'px';
+    fabGroup.style.top    = Math.max(0, Math.min(window.innerHeight - fabGroup.offsetHeight, e.clientY - fabOffset[1])) + 'px';
+    fabGroup.style.right  = 'auto'; fabGroup.style.bottom = 'auto';
   });
   fab.addEventListener('pointerup', e => {
     fab.releasePointerCapture(e.pointerId);
@@ -349,6 +368,19 @@ Theme: Auto`;
       if (menu.getAttribute('aria-hidden') === 'true') toggleMenu();
     });
   }
+
+  const fabTime  = document.getElementById('fab-time');
+  const fabTimer = document.getElementById('fab-timer');
+
+  fabTime.addEventListener('click', insertCurrentTime);
+  fabTimer.addEventListener('click', () => { if (cfg.timers[0]) startCountdown(cfg.timers[0]); });
+
+  function updateQuickTimerBtn() {
+    const t = cfg.timers[0];
+    fabTimer.textContent = t ? String(t) : '▶';
+    fabTimer.style.display = t ? '' : 'none';
+  }
+  updateQuickTimerBtn();
 
   // ═══════════════════════════════════════════════════════
   //  MENU — build from config, open / close
@@ -370,7 +402,10 @@ Theme: Auto`;
     addSep();
     addMenuBtn('Insert current time', insertCurrentTime);
     addSep();
-    cfg.inserts.forEach(w => addMenuBtn(`Insert ${w}`, () => insertAtCursor(w + ' ')));
+    cfg.inserts.forEach(w => addMenuBtn(`Insert ${w}`, () => {
+      const d = new Date();
+      insertAtCursor(`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${w} `);
+    }));
     addSep();
     addMenuBtn('Edit config…', openConfigModal);
   }
@@ -415,7 +450,7 @@ Theme: Auto`;
     const text = configTextarea.value;
     saveConfigText(text);
     cfg = parseConfig(text);
-    applyMisc(); buildMenu(); renderOverlays(); updateGlobalTimer();
+    applyMisc(); buildMenu(); renderOverlays(); updateGlobalTimer(); updateQuickTimerBtn();
     closeConfigModal();
   });
   configCancelBtn.addEventListener('click', closeConfigModal);
@@ -493,6 +528,7 @@ Theme: Auto`;
       const cur = toSeconds(+m[1], +m[2], +m[3]);
       let next = null;
       for (let j = i + 1; j < lines.length; j++) {
+        if (/^---\s*$/.test(lines[j])) break;
         const n = lines[j].match(timeRe);
         if (n) { next = toSeconds(+n[1], +n[2], +n[3]); break; }
       }
